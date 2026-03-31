@@ -93,6 +93,65 @@ function escapeXml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
 }
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 150,
+        system: process.env.SYSTEM_PROMPT || 'You are a professional dispatcher. Collect caller name, address, job type, and appointment time. Ask one question at a time. Keep responses under 2 sentences.',
+        messages: history,
+      }),
+    });
+
+    const aiData = await aiResponse.json();
+    const reply = aiData?.content?.[0]?.text || 'Sorry, I did not catch that. Could you repeat?';
+
+    history.push({ role: 'assistant', content: reply });
+    conversations.set(callSid, history);
+
+    if (/we will get someone out/i.test(reply)) {
+      console.log(`LEAD CAPTURED - ${callerNumber}:\n${history.map(m => `${m.role}: ${m.content}`).join('\n')}`);
+    }
+
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">${escapeXml(reply)}</Say>
+  <Gather input="speech" action="/api/twilio/process" speechTimeout="auto" timeout="8">
+  </Gather>
+  <Say voice="Polly.Joanna">Are you still there?</Say>
+  <Gather input="speech" action="/api/twilio/process" speechTimeout="auto" timeout="5">
+  </Gather>
+  <Say voice="Polly.Joanna">Thank you for calling. Goodbye!</Say>
+  <Hangup/>
+</Response>`;
+
+    return new NextResponse(twiml, {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' },
+    });
+
+  } catch (err) {
+    console.error('Process route error:', err);
+    const fallback = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Sorry, I encountered an error. Please try again.</Say>
+  <Hangup/>
+</Response>`;
+    return new NextResponse(fallback, {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' },
+    });
+  }
+}
+
+function escapeXml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
         'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
       },
