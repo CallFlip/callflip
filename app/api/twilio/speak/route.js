@@ -4,16 +4,19 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const text = searchParams.get('text') || 'Hello';
 
+  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+
   const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}/stream`,
+    'https://api.elevenlabs.io/v1/text-to-speech/' + voiceId + '/stream',
     {
       method: 'POST',
       headers: {
-        'xi-api-key': process.env.ELEVENLABS_API_KEY,
+        'xi-api-key': apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text,
+        text: text,
         model_id: 'eleven_turbo_v2',
         voice_settings: {
           stability: 0.4,
@@ -23,6 +26,12 @@ export async function GET(req) {
       }),
     }
   );
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('ElevenLabs error:', response.status, error);
+    return new NextResponse('Error', { status: 500 });
+  }
 
   const audioBuffer = await response.arrayBuffer();
 
