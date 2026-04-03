@@ -9,8 +9,11 @@ export async function POST(req) {
     const callSid = formData.get('CallSid') || '';
     const callerNumber = formData.get('From') || '';
 
+    const baseUrl = 'https://callflip-51gp.vercel.app';
+
     if (/speak to (a )?(human|person|agent|representative|someone)/i.test(speechResult) || /transfer|operator/i.test(speechResult)) {
-      const transferTwiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna">One moment, transferring you now.</Say><Dial>' + (process.env.TRANSFER_NUMBER || '+15555555555') + '</Dial></Response>';
+      const transferText = encodeURIComponent('One moment, transferring you now.');
+      const transferTwiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Play>' + baseUrl + '/api/twilio/speak?text=' + transferText + '</Play><Dial>' + (process.env.TRANSFER_NUMBER || '+15555555555') + '</Dial></Response>';
       conversations.delete(callSid);
       return new NextResponse(transferTwiml, { status: 200, headers: { 'Content-Type': 'text/xml' } });
     }
@@ -46,7 +49,11 @@ export async function POST(req) {
       console.log('LEAD CAPTURED - ' + callerNumber + ':\n' + history.map(function(m) { return m.role + ': ' + m.content; }).join('\n'));
     }
 
-    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Joanna">' + escapeXml(reply) + '</Say><Gather input="speech" action="/api/twilio/process" speechTimeout="auto" timeout="8"></Gather><Say voice="Polly.Joanna">Are you still there?</Say><Gather input="speech" action="/api/twilio/process" speechTimeout="auto" timeout="5"></Gather><Say voice="Polly.Joanna">Thank you for calling. Goodbye!</Say><Hangup/></Response>';
+    const replyEncoded = encodeURIComponent(reply);
+    const stillThereEncoded = encodeURIComponent('Are you still there?');
+    const goodbyeEncoded = encodeURIComponent('Thank you for calling. Goodbye!');
+
+    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Play>' + baseUrl + '/api/twilio/speak?text=' + replyEncoded + '</Play><Gather input="speech" action="/api/twilio/process" speechTimeout="auto" timeout="8"></Gather><Play>' + baseUrl + '/api/twilio/speak?text=' + stillThereEncoded + '</Play><Gather input="speech" action="/api/twilio/process" speechTimeout="auto" timeout="5"></Gather><Play>' + baseUrl + '/api/twilio/speak?text=' + goodbyeEncoded + '</Play><Hangup/></Response>';
 
     return new NextResponse(twiml, { status: 200, headers: { 'Content-Type': 'text/xml' } });
 
@@ -55,13 +62,4 @@ export async function POST(req) {
     const fallback = '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, I encountered an error. Please try again.</Say><Hangup/></Response>';
     return new NextResponse(fallback, { status: 200, headers: { 'Content-Type': 'text/xml' } });
   }
-}
-
-function escapeXml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
